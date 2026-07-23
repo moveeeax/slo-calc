@@ -1,0 +1,13 @@
+# Binaries
+/slo-calc
+*.exe
+*.out
+
+# Test / coverage
+*.test
+coverage.out
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
