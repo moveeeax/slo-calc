@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.22", "1.23"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Verify formatting
+        run: test -z "$(gofmt -l .)"
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Build
+        run: go build -o /tmp/slo-calc .
+
+      - name: Smoke-test CLI (version + help)
+        run: |
+          /tmp/slo-calc --version
+          /tmp/slo-calc --help || true
+
+      - name: Generate Prometheus rules from the example spec
+        run: |
+          /tmp/slo-calc --spec examples/slos.yaml --window 30d --output rules > /tmp/rules.yaml
+          test -s /tmp/rules.yaml
+          grep -q 'slo:sli_error:ratio_rate1h' /tmp/rules.yaml
+          grep -q '> 0.0144' /tmp/rules.yaml
+
+      - name: Validate rules with promtool
+        run: |
+          PROM_VER=2.53.2
+          curl -sSL "https://github.com/prometheus/prometheus/releases/download/v${PROM_VER}/prometheus-${PROM_VER}.linux-amd64.tar.gz" | tar xz
+          "./prometheus-${PROM_VER}.linux-amd64/promtool" check rules /tmp/rules.yaml

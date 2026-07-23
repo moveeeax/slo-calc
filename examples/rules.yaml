@@ -1,0 +1,193 @@
+groups:
+  - name: slo:api-availability
+    rules:
+      - record: slo:sli_error:ratio_rate1h
+        expr: |-
+          ((sum(increase(http_requests_total{job="api"}[1h]))) - (sum(increase(http_requests_total{job="api",code!~"5.."}[1h]))))
+          /
+          (sum(increase(http_requests_total{job="api"}[1h])))
+        labels:
+          slo: api-availability
+          team: platform
+      - record: slo:sli_error:ratio_rate5m
+        expr: |-
+          ((sum(increase(http_requests_total{job="api"}[5m]))) - (sum(increase(http_requests_total{job="api",code!~"5.."}[5m]))))
+          /
+          (sum(increase(http_requests_total{job="api"}[5m])))
+        labels:
+          slo: api-availability
+          team: platform
+      - record: slo:sli_error:ratio_rate6h
+        expr: |-
+          ((sum(increase(http_requests_total{job="api"}[6h]))) - (sum(increase(http_requests_total{job="api",code!~"5.."}[6h]))))
+          /
+          (sum(increase(http_requests_total{job="api"}[6h])))
+        labels:
+          slo: api-availability
+          team: platform
+      - record: slo:sli_error:ratio_rate30m
+        expr: |-
+          ((sum(increase(http_requests_total{job="api"}[30m]))) - (sum(increase(http_requests_total{job="api",code!~"5.."}[30m]))))
+          /
+          (sum(increase(http_requests_total{job="api"}[30m])))
+        labels:
+          slo: api-availability
+          team: platform
+      - record: slo:sli_error:ratio_rate1d
+        expr: |-
+          ((sum(increase(http_requests_total{job="api"}[1d]))) - (sum(increase(http_requests_total{job="api",code!~"5.."}[1d]))))
+          /
+          (sum(increase(http_requests_total{job="api"}[1d])))
+        labels:
+          slo: api-availability
+          team: platform
+      - record: slo:sli_error:ratio_rate2h
+        expr: |-
+          ((sum(increase(http_requests_total{job="api"}[2h]))) - (sum(increase(http_requests_total{job="api",code!~"5.."}[2h]))))
+          /
+          (sum(increase(http_requests_total{job="api"}[2h])))
+        labels:
+          slo: api-availability
+          team: platform
+      - record: slo:sli_error:ratio_rate3d
+        expr: |-
+          ((sum(increase(http_requests_total{job="api"}[3d]))) - (sum(increase(http_requests_total{job="api",code!~"5.."}[3d]))))
+          /
+          (sum(increase(http_requests_total{job="api"}[3d])))
+        labels:
+          slo: api-availability
+          team: platform
+      - alert: SLOBurnPage
+        expr: |-
+          (
+            slo:sli_error:ratio_rate1h{slo="api-availability"} > 0.0144
+            and
+            slo:sli_error:ratio_rate5m{slo="api-availability"} > 0.0144
+          )
+          or
+          (
+            slo:sli_error:ratio_rate6h{slo="api-availability"} > 0.006
+            and
+            slo:sli_error:ratio_rate30m{slo="api-availability"} > 0.006
+          )
+        labels:
+          severity: page
+          slo: api-availability
+          team: platform
+        annotations:
+          summary: SLO api-availability is burning its 99.9% error budget too fast (page)
+      - alert: SLOBurnTicket
+        expr: |-
+          (
+            slo:sli_error:ratio_rate1d{slo="api-availability"} > 0.003
+            and
+            slo:sli_error:ratio_rate2h{slo="api-availability"} > 0.003
+          )
+          or
+          (
+            slo:sli_error:ratio_rate3d{slo="api-availability"} > 0.001
+            and
+            slo:sli_error:ratio_rate6h{slo="api-availability"} > 0.001
+          )
+        labels:
+          severity: ticket
+          slo: api-availability
+          team: platform
+        annotations:
+          summary: SLO api-availability is burning its 99.9% error budget too fast (ticket)
+  - name: slo:api-latency
+    rules:
+      - record: slo:sli_error:ratio_rate1h
+        expr: |-
+          ((sum(increase(http_request_duration_seconds_count{job="api"}[1h]))) - (sum(increase(http_request_duration_seconds_bucket{job="api",le="0.3"}[1h]))))
+          /
+          (sum(increase(http_request_duration_seconds_count{job="api"}[1h])))
+        labels:
+          slo: api-latency
+          team: platform
+      - record: slo:sli_error:ratio_rate5m
+        expr: |-
+          ((sum(increase(http_request_duration_seconds_count{job="api"}[5m]))) - (sum(increase(http_request_duration_seconds_bucket{job="api",le="0.3"}[5m]))))
+          /
+          (sum(increase(http_request_duration_seconds_count{job="api"}[5m])))
+        labels:
+          slo: api-latency
+          team: platform
+      - record: slo:sli_error:ratio_rate6h
+        expr: |-
+          ((sum(increase(http_request_duration_seconds_count{job="api"}[6h]))) - (sum(increase(http_request_duration_seconds_bucket{job="api",le="0.3"}[6h]))))
+          /
+          (sum(increase(http_request_duration_seconds_count{job="api"}[6h])))
+        labels:
+          slo: api-latency
+          team: platform
+      - record: slo:sli_error:ratio_rate30m
+        expr: |-
+          ((sum(increase(http_request_duration_seconds_count{job="api"}[30m]))) - (sum(increase(http_request_duration_seconds_bucket{job="api",le="0.3"}[30m]))))
+          /
+          (sum(increase(http_request_duration_seconds_count{job="api"}[30m])))
+        labels:
+          slo: api-latency
+          team: platform
+      - record: slo:sli_error:ratio_rate1d
+        expr: |-
+          ((sum(increase(http_request_duration_seconds_count{job="api"}[1d]))) - (sum(increase(http_request_duration_seconds_bucket{job="api",le="0.3"}[1d]))))
+          /
+          (sum(increase(http_request_duration_seconds_count{job="api"}[1d])))
+        labels:
+          slo: api-latency
+          team: platform
+      - record: slo:sli_error:ratio_rate2h
+        expr: |-
+          ((sum(increase(http_request_duration_seconds_count{job="api"}[2h]))) - (sum(increase(http_request_duration_seconds_bucket{job="api",le="0.3"}[2h]))))
+          /
+          (sum(increase(http_request_duration_seconds_count{job="api"}[2h])))
+        labels:
+          slo: api-latency
+          team: platform
+      - record: slo:sli_error:ratio_rate3d
+        expr: |-
+          ((sum(increase(http_request_duration_seconds_count{job="api"}[3d]))) - (sum(increase(http_request_duration_seconds_bucket{job="api",le="0.3"}[3d]))))
+          /
+          (sum(increase(http_request_duration_seconds_count{job="api"}[3d])))
+        labels:
+          slo: api-latency
+          team: platform
+      - alert: SLOBurnPage
+        expr: |-
+          (
+            slo:sli_error:ratio_rate1h{slo="api-latency"} > 0.144
+            and
+            slo:sli_error:ratio_rate5m{slo="api-latency"} > 0.144
+          )
+          or
+          (
+            slo:sli_error:ratio_rate6h{slo="api-latency"} > 0.06
+            and
+            slo:sli_error:ratio_rate30m{slo="api-latency"} > 0.06
+          )
+        labels:
+          severity: page
+          slo: api-latency
+          team: platform
+        annotations:
+          summary: SLO api-latency is burning its 99% error budget too fast (page)
+      - alert: SLOBurnTicket
+        expr: |-
+          (
+            slo:sli_error:ratio_rate1d{slo="api-latency"} > 0.03
+            and
+            slo:sli_error:ratio_rate2h{slo="api-latency"} > 0.03
+          )
+          or
+          (
+            slo:sli_error:ratio_rate3d{slo="api-latency"} > 0.01
+            and
+            slo:sli_error:ratio_rate6h{slo="api-latency"} > 0.01
+          )
+        labels:
+          severity: ticket
+          slo: api-latency
+          team: platform
+        annotations:
+          summary: SLO api-latency is burning its 99% error budget too fast (ticket)

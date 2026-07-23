@@ -1,0 +1,21 @@
+# Example SLO spec for slo-calc.
+# $window is replaced by the rate window slo-calc is evaluating
+# (30d for the report, and 5m/30m/1h/2h/6h/1d/3d for the generated rules).
+slos:
+  # A ratio SLI: fraction of non-5xx responses.
+  - name: api-availability
+    objective: 99.9
+    type: ratio
+    good: sum(increase(http_requests_total{job="api",code!~"5.."}[$window]))
+    total: sum(increase(http_requests_total{job="api"}[$window]))
+    labels:
+      team: platform
+
+  # A latency SLI: fraction of requests served under 300ms.
+  - name: api-latency
+    objective: 99.0
+    type: latency
+    good: sum(increase(http_request_duration_seconds_bucket{job="api",le="0.3"}[$window]))
+    total: sum(increase(http_request_duration_seconds_count{job="api"}[$window]))
+    labels:
+      team: platform
