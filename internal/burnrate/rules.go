@@ -95,14 +95,20 @@ func burnTerm(name string, a Alert) string {
 	return fmt.Sprintf("(\n  %s\n  and\n  %s\n)", long, short)
 }
 
+// withSLO merges the SLO's user-supplied labels with the labels this rule
+// needs. The "slo" label is written last and so always wins: the generated
+// alert expressions select series by {slo="<name>"}, and letting a user
+// label overwrite it produced a promtool-valid ruleset whose alerts could
+// never match anything.
 func withSLO(slo spec.SLO, extra map[string]string) map[string]string {
-	m := map[string]string{"slo": slo.Name}
+	m := make(map[string]string, len(slo.Labels)+len(extra)+1)
 	for k, v := range slo.Labels {
 		m[k] = v
 	}
 	for k, v := range extra {
 		m[k] = v
 	}
+	m["slo"] = slo.Name
 	return m
 }
 

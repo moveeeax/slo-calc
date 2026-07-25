@@ -13,7 +13,8 @@ so you don't have to hand-derive burn-rate thresholds for every service.
 ## What it does
 
 - **Reads SLI queries from a YAML spec** — ratio *or* latency SLIs.
-- **Computes** availability, error budget remaining, and burn rate over any window.
+- **Computes** availability, error budget remaining (as a share *and* as wall-clock
+  minutes), and burn rate over any window.
 - **Generates multi-burn-rate alert rules** (page + ticket, long + short window) as a
   promtool-valid Prometheus rules file.
 - **Outputs** a human table, JSON for dashboards, or the rules file.
@@ -67,10 +68,14 @@ slo-calc --spec examples/slos.yaml --window 30d --prometheus http://localhost:90
 ```
 
 ```
-SLO               OBJECTIVE  AVAIL     BUDGET LEFT  BURN   STATUS
-api-availability  99.900%    99.9820%  82.0%        0.18x  OK
-api-latency       99.000%    98.7500%  -25.0%       1.25x  BREACHED
+SLO               OBJECTIVE  AVAIL     ERR BUDGET  BUDGET LEFT       BURN   STATUS
+api-availability  99.900%    99.9820%  43.2m       35.4m (82.0%)     0.18x  OK
+api-latency       99.000%    98.7500%  7.2h        -108.0m (-25.0%)  1.25x  BREACHED
 ```
+
+`ERR BUDGET` is the whole budget the objective buys you over the window in
+wall-clock terms; `BUDGET LEFT` is what is still unspent. A negative value means
+the objective has already been missed over the window.
 
 JSON for dashboards:
 
@@ -99,7 +104,7 @@ slo-calc --spec examples/slos.yaml --prometheus http://localhost:9090 \
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--spec` | *(required)* | Path to the SLO spec YAML |
-| `--window` | `30d` | SLO window (`30d`, `7d`, `24h`, `1w`, …) |
+| `--window` | `30d` | SLO window (`30d`, `7d`, `24h`, `1w`, …); must be positive |
 | `--output` | `table` | `table`, `json`, or `rules` |
 | `--prometheus` | — | Prometheus base URL (required for `table`/`json`) |
 | `--at` | now | RFC3339 instant to evaluate at (backfill) |
@@ -110,11 +115,23 @@ slo-calc --spec examples/slos.yaml --prometheus http://localhost:9090 \
 For each SLO over the window:
 
 ```
-availability = good / total
-error budget = 1 - objective            # e.g. 99.9% -> 0.001
-consumed     = (1 - availability) / error budget
-burn rate    = (1 - availability) / error budget
+availability   = good / total
+error budget   = 1 - objective            # e.g. 99.9% -> 0.001
+consumed       = (1 - availability) / error budget
+burn rate      = (1 - availability) / error budget
+budget minutes = window in minutes * error budget
 ```
+
+`budget minutes` is the familiar "how long may I be down this month" figure. It
+assumes a uniform request rate across the window; with bursty traffic the
+event-ratio budget above is the authoritative one.
+
+| Objective | 7d      | 28d     | 30d     | 90d      | 365d     |
+|-----------|---------|---------|---------|----------|----------|
+| 99%       | 100.8m  | 403.2m  | 432m    | 1296m    | 5256m    |
+| 99.9%     | 10.08m  | 40.32m  | 43.2m   | 129.6m   | 525.6m   |
+| 99.95%    | 5.04m   | 20.16m  | 21.6m   | 64.8m    | 262.8m   |
+| 99.99%    | 1.008m  | 4.032m  | 4.32m   | 12.96m   | 52.56m   |
 
 A **burn rate of 1** spends the entire budget exactly at the end of the window.
 The generated alert rules fire when a **long** and a **short** window *both*
@@ -129,6 +146,22 @@ exceed a burn-rate threshold, following the standard table (at a 30-day window):
 
 The factors scale automatically for other SLO windows
 (`burn = consumed × sloWindow / longWindow`).
+
+### A caveat on loose objectives
+
+The alert threshold is `burn rate × error budget`, and it is compared against an
+error *ratio*, which can never exceed 1. Below roughly a 93% objective the 14.4×
+page row needs a ratio above 1 — the rule is emitted, `promtool` accepts it, and
+it can never fire. `slo-calc` warns on stderr when this happens:
+
+```
+slo-calc: warning: slo "loose" (90%): the page row 1h/5m needs an error ratio
+above 1.44, but a ratio cannot exceed 1 — this alert can never fire.
+Tighten the objective or lengthen the SLO window.
+```
+
+The JSON output carries the same information as a `"reachable"` field on each
+alert.
 
 ## Development
 

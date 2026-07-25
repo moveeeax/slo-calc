@@ -2,6 +2,7 @@ package budget
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -70,10 +71,40 @@ func TestParseDuration(t *testing.T) {
 }
 
 func TestParseDurationErrors(t *testing.T) {
-	for _, in := range []string{"", "abc", "10", "5x", "d5", "5.5h"} {
+	for _, in := range []string{"", "abc", "10", "5x", "d5", "5.5h", "-5m"} {
 		if _, err := ParseDuration(in); err == nil {
 			t.Errorf("ParseDuration(%q) expected error", in)
 		}
+	}
+}
+
+// TestParseDurationOverflow guards the int64-nanosecond ceiling. Before this
+// was checked, "100000000000d" parsed happily into 1734576h44m48.761856s —
+// a wrapped-around window that then produced a confidently wrong budget.
+func TestParseDurationOverflow(t *testing.T) {
+	overflowing := []string{
+		"100000000000d",        // wraps to a small positive duration
+		"9223372036854775807s", // MaxInt64 seconds
+		"1000000w",             // ~19000 years
+		"106752d",              // one day past the ~292-year ceiling
+		// A sum that overflows even though no single term does: MaxInt64 ns
+		// is under 366*292 days.
+		strings.Repeat("292d", 366),
+	}
+	for _, in := range overflowing {
+		got, err := ParseDuration(in)
+		if err == nil {
+			t.Errorf("ParseDuration(%.40q...) = %v, want an overflow error", in, got)
+		}
+	}
+
+	// The largest representable duration must still parse, and must not be
+	// rejected by an over-eager guard. MaxInt64 ns is 106751d + change, so
+	// 106750 days is comfortably inside the ceiling.
+	if d, err := ParseDuration("106750d"); err != nil {
+		t.Errorf("ParseDuration(106750d) should fit in a Duration: %v", err)
+	} else if d != 106750*Day {
+		t.Errorf("ParseDuration(106750d) = %v, want %v", d, 106750*Day)
 	}
 }
 

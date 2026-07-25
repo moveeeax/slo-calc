@@ -39,6 +39,11 @@ type Alert struct {
 	// Threshold is the error-ratio value both windows must exceed. It is
 	// Factor multiplied by the error budget fraction (1-objective).
 	Threshold float64 `json:"threshold"`
+	// Reachable reports whether the alert can ever fire. An error ratio is
+	// bounded by 1 (every event bad), so a threshold at or above 1 yields a
+	// rule that is valid, deployable and permanently dead. Loose objectives
+	// do this: a 90% SLO gives the 14.4x page row a threshold of 1.44.
+	Reachable bool `json:"reachable"`
 }
 
 // Factor is the burn-rate multiplier for a level given the SLO window.
@@ -58,12 +63,14 @@ func Alerts(objective float64, sloWindow time.Duration) []Alert {
 	out := make([]Alert, 0, len(DefaultLevels))
 	for _, l := range DefaultLevels {
 		f := l.Factor(sloWindow)
+		th := budget.Round(f*errBudget, 8)
 		out = append(out, Alert{
 			Severity:  l.Severity,
 			Long:      shortDur(l.Long),
 			Short:     shortDur(l.Short),
 			Factor:    budget.Round(f, 4),
-			Threshold: budget.Round(f*errBudget, 8),
+			Threshold: th,
+			Reachable: th < 1,
 		})
 	}
 	return out

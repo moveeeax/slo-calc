@@ -33,6 +33,17 @@ type Result struct {
 	// that would exactly exhaust it over the window. A burn rate of 1
 	// exhausts the budget precisely at the end of the window.
 	BurnRate float64 `json:"burn_rate"`
+	// WindowMinutes is the length of the SLO window in minutes.
+	WindowMinutes float64 `json:"window_minutes"`
+	// ErrorBudgetMinutes is the error budget expressed as wall-clock time:
+	// WindowMinutes * ErrorBudget. It is the familiar "you may be down for
+	// 43.2 minutes a month at 99.9%" figure, and assumes a uniform request
+	// rate across the window — with bursty traffic the event-ratio budget
+	// above is the authoritative one.
+	ErrorBudgetMinutes float64 `json:"error_budget_minutes"`
+	// BudgetRemainingMinutes is the unspent part of ErrorBudgetMinutes. It
+	// goes negative once the objective has been breached over the window.
+	BudgetRemainingMinutes float64 `json:"budget_remaining_minutes"`
 }
 
 // Compute derives the error-budget state for one SLO.
@@ -42,15 +53,28 @@ type Result struct {
 //	errorBudget  = 1 - objective
 //	consumed     = errorRatio / errorBudget
 //	burnRate     = errorRatio / errorBudget   (== consumed over the full window)
+//	budgetMins   = window in minutes * errorBudget
 //
-// objective is a fraction in (0,1). When total is zero the SLO is treated
-// as perfectly available, since no traffic means no observed errors.
+// objective is a *fraction* in [0,1], not a percentage: 99.9% is 0.999. A
+// value outside that range is a caller error — almost always a percentage
+// passed where a fraction was expected — and is clamped into range so the
+// arithmetic downstream cannot produce a negative error budget. Callers
+// should reject such objectives before getting here; spec validation does.
+//
+// When total is zero the SLO is treated as perfectly available, since no
+// traffic means no observed errors.
 func Compute(name string, objective, good, total float64, window time.Duration) Result {
+	if objective < 0 || math.IsNaN(objective) {
+		objective = 0
+	}
+	if objective > 1 {
+		objective = 1
+	}
 	availability := 1.0
 	if total > 0 {
 		availability = good / total
 	}
-	if availability < 0 {
+	if availability < 0 || math.IsNaN(availability) {
 		availability = 0
 	}
 	if availability > 1 {
@@ -63,7 +87,19 @@ func Compute(name string, objective, good, total float64, window time.Duration) 
 	if errorBudget > 0 {
 		consumed = errorRatio / errorBudget
 		burn = errorRatio / errorBudget
+	} else if errorRatio > 0 {
+		// A 100% objective permits no bad events at all, so any error at
+		// all exhausts a zero-width budget. The consumed *ratio* is
+		// mathematically undefined (a division by zero); report it as
+		// fully spent rather than as untouched, which is what an
+		// unguarded 0/0 used to produce.
+		consumed = 1
 	}
+	winMinutes := window.Minutes()
+	if winMinutes < 0 {
+		winMinutes = 0
+	}
+	budgetMinutes := winMinutes * errorBudget
 	return Result{
 		Name:            name,
 		Objective:       objective,
@@ -75,11 +111,21 @@ func Compute(name string, objective, good, total float64, window time.Duration) 
 		BudgetConsumed:  consumed,
 		BudgetRemaining: 1 - consumed,
 		BurnRate:        burn,
+		WindowMinutes:   Round(winMinutes, 6),
+		// Rounded to the microsecond: the objective arrives as a decimal
+		// percentage divided by 100, so the raw product carries float
+		// residue (43200 * (1-0.999) is 43.199999999995242, not 43.2).
+		ErrorBudgetMinutes:     Round(budgetMinutes, 6),
+		BudgetRemainingMinutes: Round(budgetMinutes*(1-consumed), 6),
 	}
 }
 
-// Healthy reports whether the SLO still has error budget left.
+// Healthy reports whether the SLO still has error budget left. A zero-width
+// budget (a 100% objective) is healthy only while nothing has failed.
 func (r Result) Healthy() bool {
+	if r.ErrorBudget <= 0 {
+		return r.Availability >= 1
+	}
 	return r.BudgetConsumed <= 1+1e-9
 }
 
