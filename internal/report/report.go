@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
+	"strconv"
 	"text/tabwriter"
 	"time"
 
@@ -63,22 +65,40 @@ func (r *Report) JSON(w io.Writer) error {
 // Table writes a human-readable summary.
 func (r *Report) Table(w io.Writer) error {
 	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
-	fmt.Fprintf(tw, "SLO\tOBJECTIVE\tAVAIL\tBUDGET LEFT\tBURN\tSTATUS\n")
+	fmt.Fprintf(tw, "SLO\tOBJECTIVE\tAVAIL\tERR BUDGET\tBUDGET LEFT\tBURN\tSTATUS\n")
 	for _, e := range r.Entries {
 		status := "OK"
 		if !e.Healthy() {
 			status = "BREACHED"
 		}
-		fmt.Fprintf(tw, "%s\t%.3f%%\t%.4f%%\t%.1f%%\t%.2fx\t%s\n",
+		fmt.Fprintf(tw, "%s\t%.3f%%\t%.4f%%\t%s\t%s (%.1f%%)\t%.2fx\t%s\n",
 			e.Name,
 			e.Objective*100,
 			e.Availability*100,
+			FormatMinutes(e.ErrorBudgetMinutes),
+			FormatMinutes(snap(e.BudgetRemainingMinutes)),
 			snap(e.BudgetRemaining*100),
 			e.BurnRate,
 			status,
 		)
 	}
 	return tw.Flush()
+}
+
+// FormatMinutes renders a wall-clock error budget in the largest unit that
+// keeps it readable: seconds below a minute, minutes below two hours, hours
+// above that. Negative values (an overspent budget) keep their sign.
+func FormatMinutes(m float64) string {
+	switch a := math.Abs(m); {
+	case a == 0:
+		return "0m"
+	case a < 1:
+		return strconv.FormatFloat(m*60, 'f', 1, 64) + "s"
+	case a < 120:
+		return strconv.FormatFloat(m, 'f', 1, 64) + "m"
+	default:
+		return strconv.FormatFloat(m/60, 'f', 1, 64) + "h"
+	}
 }
 
 // snap collapses tiny floating-point residues to a clean zero so the table

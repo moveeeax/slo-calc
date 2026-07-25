@@ -2,6 +2,7 @@ package budget
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -13,9 +14,16 @@ const (
 	Week = 7 * Day
 )
 
+// maxDuration is the largest value a time.Duration (int64 nanoseconds) can
+// hold, about 292 years.
+const maxDuration = time.Duration(math.MaxInt64)
+
 // ParseDuration parses a Prometheus-style duration such as "5m", "6h",
 // "30d" or "2w". Unlike time.ParseDuration it understands days and weeks,
 // which SLO windows routinely use.
+//
+// Values too large to fit in a time.Duration are rejected rather than
+// silently wrapping around into a small or negative window.
 func ParseDuration(s string) (time.Duration, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -53,7 +61,14 @@ func ParseDuration(s string) (time.Duration, error) {
 		default:
 			return 0, fmt.Errorf("invalid duration %q: unknown unit %q", s, string(c))
 		}
-		total += time.Duration(n) * unit
+		if time.Duration(n) > maxDuration/unit {
+			return 0, fmt.Errorf("invalid duration %q: %d%s overflows the maximum duration of %v", s, n, string(c), maxDuration)
+		}
+		part := time.Duration(n) * unit
+		if part > maxDuration-total {
+			return 0, fmt.Errorf("invalid duration %q: sum overflows the maximum duration of %v", s, maxDuration)
+		}
+		total += part
 		matched = true
 	}
 	if num.Len() != 0 || !matched {

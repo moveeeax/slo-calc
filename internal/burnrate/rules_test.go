@@ -90,6 +90,53 @@ func TestBuildRulesValidYAMLAndThreshold(t *testing.T) {
 	}
 }
 
+// TestUserLabelsCannotHijackTheSLOLabel is a regression test. The generated
+// alert expressions select series by {slo="<name>"}, so a user label named
+// "slo" used to relabel the recording rules out from under them, producing a
+// promtool-valid ruleset whose alerts could never match anything.
+func TestUserLabelsCannotHijackTheSLOLabel(t *testing.T) {
+	s, err := spec.Parse([]byte(`
+slos:
+  - name: api
+    objective: 99.9
+    good: g[$window]
+    total: t[$window]
+    labels:
+      slo: hijacked
+      severity: none
+      team: platform
+`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	rf := BuildRules(s, 30*budget.Day)
+	if len(rf.Groups) != 1 {
+		t.Fatalf("want 1 group, got %d", len(rf.Groups))
+	}
+	for _, r := range rf.Groups[0].Rules {
+		if got := r.Labels["slo"]; got != "api" {
+			t.Errorf("rule %q%q has slo=%q, want %q — alerts select on this label",
+				r.Record, r.Alert, got, "api")
+		}
+		if r.Labels["team"] != "platform" {
+			t.Errorf("user label team was dropped: %+v", r.Labels)
+		}
+		// The severity an alert rule carries is the one the table assigns,
+		// not one a user label smuggled in.
+		if r.Alert != "" && r.Labels["severity"] == "none" {
+			t.Errorf("alert %q took its severity from a user label: %+v", r.Alert, r.Labels)
+		}
+	}
+	// And the alert expressions must actually reference that label value.
+	out, err := yaml.Marshal(rf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `{slo="api"}`) {
+		t.Errorf("alert expressions do not select slo=\"api\":\n%s", out)
+	}
+}
+
 func TestErrorRatioExprSubstitutesWindow(t *testing.T) {
 	s := sampleSpec(t)
 	expr := errorRatioExpr(s.SLOs[0], "5m")
