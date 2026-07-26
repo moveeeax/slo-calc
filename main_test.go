@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,6 +112,37 @@ slos:
 	}
 	if !strings.Contains(stdout, "SLOBurnPage") {
 		t.Errorf("the rules should still be emitted:\n%s", stdout)
+	}
+}
+
+// TestUnreachableAlertWarningNonRulesOutput checks that the same
+// never-fire warning fires for --output table and --output json, not just
+// --output rules. A user watching the day-to-day report has just as much
+// reason to learn that one of their configured alerts is structurally dead
+// as a user generating the rules file does — before this fix, only the
+// "rules" path ever printed it.
+func TestUnreachableAlertWarningNonRulesOutput(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"success","data":{"resultType":"scalar","result":[0,"1"]}}`))
+	}))
+	defer srv.Close()
+
+	spec := writeSpec(t, `
+slos:
+  - name: loose
+    objective: 90
+    good: g[$window]
+    total: t[$window]
+`)
+	for _, output := range []string{"table", "json"} {
+		_, stderr, err := runCLI(t, "--spec", spec, "--window", "30d", "--output", output, "--prometheus", srv.URL)
+		if err != nil {
+			t.Fatalf("--output %s: %v", output, err)
+		}
+		if !strings.Contains(stderr, "can never fire") {
+			t.Errorf("--output %s: expected an unreachable-threshold warning, got stderr:\n%s", output, stderr)
+		}
 	}
 }
 

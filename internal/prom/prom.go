@@ -7,12 +7,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// maxResponseBytes caps how much of a response body Query will read. The
+// API only ever needs a handful of bytes for a single scalar, but a
+// misconfigured --prometheus URL can point at something that streams an
+// unbounded response (a proxy looping back on itself, a log tail exposed
+// over HTTP); without a cap that reads the whole thing into memory before
+// failing to parse it as JSON.
+const maxResponseBytes = 10 << 20 // 10MiB
 
 // Querier evaluates a PromQL expression at a point in time and returns a
 // single scalar. It is an interface so the evaluator can be tested with a
@@ -58,16 +67,27 @@ func (c *Client) Query(ctx context.Context, expr string, ts time.Time) (float64,
 	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("query prometheus: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// Read (a bounded amount of) the body up front rather than decoding
+	// straight off resp.Body: a non-2xx response from a reverse proxy in
+	// front of Prometheus (a 502/504 with an HTML error page, an empty 503)
+	// fails JSON decoding either way, but folding in the status code turns
+	// "decode prometheus response: invalid character '<' looking for
+	// beginning of value" into something that actually points at the proxy.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return 0, fmt.Errorf("read prometheus response (http %d): %w", resp.StatusCode, err)
+	}
+
 	var ar apiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&ar); err != nil {
-		return 0, fmt.Errorf("decode prometheus response: %w", err)
+	if err := json.Unmarshal(body, &ar); err != nil {
+		return 0, fmt.Errorf("decode prometheus response (http %d): %w", resp.StatusCode, err)
 	}
 	if ar.Status != "success" {
-		return 0, fmt.Errorf("prometheus error: %s", ar.Error)
+		return 0, fmt.Errorf("prometheus error (http %d): %s", resp.StatusCode, ar.Error)
 	}
 	return ParseResult(ar.Data.ResultType, ar.Data.Result)
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -81,5 +82,25 @@ func TestClientQueryError(t *testing.T) {
 	defer srv.Close()
 	if _, err := New(srv.URL).Query(context.Background(), "x", time.Unix(1, 0)); err == nil {
 		t.Errorf("expected error from error status")
+	}
+}
+
+// TestClientQueryGatewayError covers the case where something in front of
+// Prometheus (a reverse proxy, a load balancer) answers with a non-2xx,
+// non-JSON body — an HTML error page rather than the API's own JSON error
+// envelope. The error must surface the HTTP status code rather than just a
+// generic "invalid character" JSON-decode failure, which points nowhere.
+func TestClientQueryGatewayError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write([]byte(`<html><body>502 Bad Gateway</body></html>`))
+	}))
+	defer srv.Close()
+	_, err := New(srv.URL).Query(context.Background(), "x", time.Unix(1, 0))
+	if err == nil {
+		t.Fatal("expected an error from a non-JSON gateway response")
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Errorf("error should mention the HTTP status code 502, got: %v", err)
 	}
 }
