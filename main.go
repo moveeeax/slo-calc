@@ -69,9 +69,15 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
+	// An alert row whose threshold sits at or above an error ratio of 1 can
+	// never fire, no matter which output format asked for it: "rules" bakes
+	// it into a dead promtool rule, and "table"/"json" report a burn rate
+	// that will visually track the same dead threshold. Warn once here so
+	// every output path tells the user the same thing.
+	warnUnreachable(stderr, sp, window)
+
 	switch *output {
 	case "rules":
-		warnUnreachable(stderr, sp, window)
 		rf := burnrate.BuildRules(sp, window)
 		enc := yaml.NewEncoder(stdout)
 		enc.SetIndent(2)

@@ -3,6 +3,7 @@ package spec
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strings"
 
@@ -77,6 +78,15 @@ func (s *Spec) validate() error {
 			return fmt.Errorf("duplicate slo name %q", slo.Name)
 		}
 		seen[slo.Name] = true
+		// math.IsNaN must be checked explicitly: every comparison with NaN
+		// (<=, >=, ...) is false, so YAML's ".nan" literal sails straight
+		// through a "<= 0 || >= 100" range check. Downstream that NaN
+		// survives into the burn-rate thresholds and gets rendered into the
+		// generated rules file as the literal text "NaN", which is not a
+		// valid PromQL number and makes promtool reject the output.
+		if math.IsNaN(slo.Objective) {
+			return fmt.Errorf("slo %q: objective is NaN", slo.Name)
+		}
 		if slo.Objective <= 0 || slo.Objective >= 100 {
 			return fmt.Errorf("slo %q: objective must be in (0,100), got %v", slo.Name, slo.Objective)
 		}
