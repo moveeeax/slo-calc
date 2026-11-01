@@ -1,7 +1,7 @@
 # slo-calc
 
 [![ci](https://github.com/moveeeax/slo-calc/actions/workflows/ci.yml/badge.svg)](https://github.com/moveeeax/slo-calc/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/go-1.22%2B-00ADD8?logo=go)](https://go.dev/)
+[![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Turn raw Prometheus SLIs into **SLOs, error budgets, burn rates**, and ready-to-apply
