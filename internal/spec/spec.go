@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 // Kind is the type of SLI a target is built from.

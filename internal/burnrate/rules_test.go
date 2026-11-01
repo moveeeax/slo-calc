@@ -7,7 +7,7 @@ import (
 	"github.com/moveeeax/slo-calc/internal/budget"
 	"github.com/moveeeax/slo-calc/internal/spec"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func sampleSpec(t *testing.T) *spec.Spec {

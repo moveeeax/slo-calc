@@ -16,7 +16,7 @@ import (
 	"github.com/moveeeax/slo-calc/internal/report"
 	"github.com/moveeeax/slo-calc/internal/spec"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 var version = "v0.1.0"
