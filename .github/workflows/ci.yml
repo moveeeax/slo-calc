@@ -6,17 +6,20 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        go-version: ["1.22", "1.23"]
+        go-version: ["1.26", "1.27"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
 
@@ -46,6 +49,9 @@ jobs:
 
       - name: Validate rules with promtool
         run: |
-          PROM_VER=2.53.2
-          curl -sSL "https://github.com/prometheus/prometheus/releases/download/v${PROM_VER}/prometheus-${PROM_VER}.linux-amd64.tar.gz" | tar xz
+          PROM_VER=3.15.1
+          PROM_SHA256=6a726885328ad9efebbf36e876ce2fb6225468a71fd1e7ce3ba666d5f4d97a84
+          curl -fsSLo prometheus.tar.gz "https://github.com/prometheus/prometheus/releases/download/v${PROM_VER}/prometheus-${PROM_VER}.linux-amd64.tar.gz"
+          echo "${PROM_SHA256}  prometheus.tar.gz" | sha256sum -c -
+          tar xzf prometheus.tar.gz
           "./prometheus-${PROM_VER}.linux-amd64/promtool" check rules /tmp/rules.yaml
