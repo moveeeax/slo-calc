@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -24,11 +25,32 @@ var version = "v0.2.0"
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "slo-calc:", err)
+		var ee *exitError
+		if errors.As(err, &ee) {
+			os.Exit(ee.code)
+		}
 		os.Exit(1)
 	}
 }
 
+// exitError carries a specific exit status, so a pipeline can tell "the
+// budget is burning" (2) apart from "slo-calc failed" (1).
+type exitError struct {
+	code int
+	msg  string
+}
+
+func (e *exitError) Error() string { return e.msg }
+
 func run(args []string, stdout, stderr io.Writer) error {
+	if len(args) > 0 {
+		switch args[0] {
+		case "logs":
+			return runLogs(args[1:], stdout, stderr)
+		case "digest":
+			return runDigest(args[1:], stdout, stderr)
+		}
+	}
 	fs := flag.NewFlagSet("slo-calc", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
@@ -40,7 +62,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 		showVer  = fs.Bool("version", false, "print version and exit")
 	)
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "slo-calc %s\n\nUsage: slo-calc --spec slos.yaml --window 30d [--output table|json|rules]\n\n", version)
+		fmt.Fprintf(stderr, "slo-calc %s\n\nUsage: slo-calc --spec slos.yaml --window 30d [--output table|json|rules]\n"+
+			"       slo-calc logs --input access.log --objective 99.9 [--latency-target 300ms]\n"+
+			"       slo-calc digest --spec slos.yaml --prometheus URL [--deliver stdout|slack|telegram]\n\n", version)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {

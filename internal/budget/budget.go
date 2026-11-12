@@ -129,6 +129,10 @@ func (r Result) Healthy() bool {
 	return r.BudgetConsumed <= 1+1e-9
 }
 
+// FormatWindow renders a duration the way Prometheus windows are written
+// (30d, 2w, 6h), falling back to Go's notation for uneven values.
+func FormatWindow(d time.Duration) string { return shortDur(d) }
+
 // shortDur renders a duration the way Prometheus windows are written,
 // collapsing whole days and weeks.
 func shortDur(d time.Duration) string {

@@ -33,7 +33,7 @@ type SLO struct {
 	Good  string `yaml:"good"`
 	Total string `yaml:"total"`
 	// Labels are attached to generated recording and alerting rules.
-	Labels map[string]string `yaml:"labels"`
+	Labels map[string]string `yaml:"labels,omitempty"`
 }
 
 // Spec is the top-level document.
