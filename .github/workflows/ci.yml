@@ -47,6 +47,12 @@ jobs:
           grep -q 'slo:sli_error:ratio_rate1h' /tmp/rules.yaml
           grep -q '> 0.0144' /tmp/rules.yaml
 
+      - name: Emit spec and rules from an access log
+        run: |
+          /tmp/slo-calc logs --input internal/accesslog/testdata/combined.log --latency-target 300ms \
+            --emit-spec /tmp/logs-spec.yaml --emit-rules /tmp/logs-rules.yaml
+          /tmp/slo-calc --spec /tmp/logs-spec.yaml --output rules | diff - /tmp/logs-rules.yaml
+
       - name: Validate rules with promtool
         run: |
           PROM_VER=3.15.1
@@ -54,4 +60,4 @@ jobs:
           curl -fsSLo prometheus.tar.gz "https://github.com/prometheus/prometheus/releases/download/v${PROM_VER}/prometheus-${PROM_VER}.linux-amd64.tar.gz"
           echo "${PROM_SHA256}  prometheus.tar.gz" | sha256sum -c -
           tar xzf prometheus.tar.gz
-          "./prometheus-${PROM_VER}.linux-amd64/promtool" check rules /tmp/rules.yaml
+          "./prometheus-${PROM_VER}.linux-amd64/promtool" check rules /tmp/rules.yaml /tmp/logs-rules.yaml
